@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { BLE_UUIDS } from '../services/ble/uuids';
 import type { SensorData, SleepPhase } from '../types';
-import { createBleManagerService, type BleConnectionState, type BleManagerService } from '../services/ble/bleManager';
+import { createBleManager, type BleConnectionState, BleManagerService, MockBleManagerService } from '../services/ble';
 
 type PendingWrite = {
 	kind: 'light-control' | 'temp-setpoint' | 'sleep-phase';
@@ -18,7 +18,7 @@ export interface BleStore {
 	error: string | null;
 	pendingWrites: PendingWrite[];
 	reconnectAttempt: number;
-	manager: BleManagerService;
+	manager: BleManagerService | MockBleManagerService;
 	startScan: () => Promise<void>;
 	stopScan: () => Promise<void>;
 	connectToDevice: (deviceId: string) => Promise<void>;
@@ -30,7 +30,7 @@ export interface BleStore {
 }
 
 const useBleStore = create<BleStore>((set, get) => {
-	const manager = createBleManagerService({
+	const manager = createBleManager({
 		onConnectionStateChange: (connectionState, connectedDeviceId) => {
 			set({ connectionState, connectedDeviceId, isScanning: connectionState === 'scanning' });
 		},
