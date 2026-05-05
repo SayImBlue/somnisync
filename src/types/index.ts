@@ -6,7 +6,13 @@ export interface SensorData {
 	timestamp: number;
 }
 
-export type SleepPhase = 'LIGHT' | 'DEEP' | 'TRANSITIONAL' | 'AWAKE';
+export type SleepPhase = 'LIGHT' | 'DEEP' | 'TRANSITIONAL' | 'AWAKE' | 'SIGNAL_LOST';
+
+export interface PhaseDerivationResult {
+	phase: SleepPhase;
+	confidenceScore: number; // 0–1: how centered the frequency is in the valid band
+	isValid: boolean; // false if frequency is out of detectable range
+}
 
 export interface AlarmConfig {
 	targetTime: string;
