@@ -1,11 +1,27 @@
-// TODO(Al Farouk): define the core shared data contracts for SomniSync.
+// TODO(Al Farouk): keep these shared contracts stable unless the BLE protocol is formally updated.
 
-export interface SensorData {}
+export interface SensorData {
+	temperature: number;
+	luminosity: number;
+	timestamp: number;
+}
 
-export interface SleepPhase {}
+export type SleepPhase = 'LIGHT' | 'DEEP' | 'TRANSITIONAL' | 'AWAKE';
 
-export interface AlarmConfig {}
+export interface AlarmConfig {
+	targetTime: string;
+	windowMinutes: number;
+	enabled: boolean;
+}
 
-export interface NightLog {}
+export interface SleepPhaseEntry {
+	phase: SleepPhase;
+	startTime: number;
+	endTime: number;
+}
 
-export interface SleepPhaseEntry {}
+export interface NightLog {
+	date: string;
+	phases: SleepPhaseEntry[];
+	sensorSnapshots: SensorData[];
+}
