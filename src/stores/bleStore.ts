@@ -17,6 +17,7 @@ export interface BleStore {
 	lastSensorData: SensorData | null;
 	error: string | null;
 	pendingWrites: PendingWrite[];
+	reconnectAttempt: number;
 	manager: BleManagerService;
 	startScan: () => Promise<void>;
 	stopScan: () => Promise<void>;
@@ -39,6 +40,9 @@ const useBleStore = create<BleStore>((set, get) => {
 		onError: (error) => {
 			set({ error: error.message, connectionState: 'error' });
 		},
+		onPermissionDenied: () => {
+			set({ error: 'BLE permissions denied. Please grant permissions in device settings.', connectionState: 'error' });
+		},
 	});
 
 	return {
@@ -48,6 +52,7 @@ const useBleStore = create<BleStore>((set, get) => {
 		lastSensorData: null,
 		error: null,
 		pendingWrites: [],
+		reconnectAttempt: 0,
 		manager,
 		startScan: async () => {
 			set({ isScanning: true, connectionState: 'scanning', error: null });
