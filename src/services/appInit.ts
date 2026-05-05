@@ -8,11 +8,13 @@ import useAlarmStore from '@/stores/alarmStore';
 import useSleepStore from '@/stores/sleepStore';
 import { initializeStorage, migrateIfNeeded, getLastSevenNights } from '@/services/storage/nightLogStorage';
 import { audioProcessor } from '@/services/audio/audioProcessor';
+import backgroundTasks from '@/services/background/backgroundTasks';
 
 const ALARM_CONFIG_KEY = 'somnisync:alarm-config';
 const LAST_DEVICE_ID_KEY = 'lastDeviceId';
 
 let appStateListener: ((state: AppStateStatus) => void) | null = null;
+let notificationResponseSubscriber: { remove: () => void } | null = null;
 
 /** Save transient state when app goes to background or is killed. */
 const persistTransientState = async (): Promise<void> => {
@@ -163,6 +165,37 @@ export const initApp = async (): Promise<void> => {
   } catch (e) {
     // ignore if not available
   }
+
+  // Initialize notification channels and handlers
+  try {
+    await backgroundTasks.initNotifications();
+  } catch (e) {
+    // ignore
+  }
+
+  // Register BLE background polling task
+  try {
+    await backgroundTasks.registerBlePollTask();
+  } catch (e) {
+    // ignore
+  }
+
+  // Listen for notification responses (e.g., user taps the alarm) and resume wake sequence
+  try {
+    notificationResponseSubscriber = backgroundTasks.addNotificationResponseListener((response) => {
+      try {
+        const data = response.notification.request.content.data as any;
+        if (data && data.type === 'alarm') {
+          // Trigger wake sequence when user taps the alarm notification
+          useAlarmStore.getState().triggerWakeSequence(Date.now());
+        }
+      } catch (err) {
+        // ignore
+      }
+    }) as any;
+  } catch (e) {
+    // ignore
+  }
 };
 
 /** Cleanup listeners when app is shutting down (useful for tests). */
@@ -171,6 +204,16 @@ export const teardownApp = async (): Promise<void> => {
     AppState.removeEventListener('change', appStateListener as any);
     appStateListener = null;
   }
+  if (notificationResponseSubscriber) {
+    try {
+      notificationResponseSubscriber.remove();
+    } catch {}
+    notificationResponseSubscriber = null;
+  }
+
+  try {
+    await backgroundTasks.unregisterBlePollTask();
+  } catch {}
 };
 
 export default initApp;
