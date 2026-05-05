@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import type { AlarmConfig, SleepPhase } from '../types';
+import backgroundTasks from '@/services/background/backgroundTasks';
 
 export type AlarmEngineState = 'idle' | 'armed' | 'triggered' | 'snoozed' | 'wake-sequence';
 
@@ -133,6 +134,14 @@ const useAlarmStore = create<AlarmStore>((set, get) => ({
 			nextTriggerAt,
 			engineState: config.enabled ? 'armed' : 'idle',
 		});
+
+		// Schedule or cancel alarm notification
+		if (clampedConfig.enabled) {
+			const targetTs = targetTimestamp;
+			void backgroundTasks.scheduleAlarmNotification('SomniSync Alarm', 'Your wake window is open', targetTs);
+		} else {
+			void backgroundTasks.cancelScheduledAlarmNotification();
+		}
 	},
 
 	/** Arm the alarm engine so the current config can trigger inside the wake window. */
@@ -148,6 +157,9 @@ const useAlarmStore = create<AlarmStore>((set, get) => ({
 			wakeSequenceStartedAt: null,
 			wakeSequenceProgress: 0,
 		});
+
+		// Cancel scheduled notifications when disarming
+		void backgroundTasks.cancelScheduledAlarmNotification();
 	},
 
 	/**
@@ -261,6 +273,10 @@ const useAlarmStore = create<AlarmStore>((set, get) => ({
 		},
 		});
 
+		// Reschedule notification for new snooze target
+		void backgroundTasks.cancelScheduledAlarmNotification();
+		void backgroundTasks.scheduleAlarmNotification('SomniSync Alarm (snoozed)', 'Your snoozed wake time', newTargetTimestamp);
+
 		return true; // Snooze allowed
 	},
 
@@ -276,6 +292,8 @@ const useAlarmStore = create<AlarmStore>((set, get) => ({
 			lastSnoozeAt: null,
 			snoozeDurationMinutes: SNOOZE_DURATION_MINUTES,
 		});
+
+		void backgroundTasks.cancelScheduledAlarmNotification();
 	},
 
 	/**
