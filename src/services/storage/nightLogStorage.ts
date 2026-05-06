@@ -179,7 +179,7 @@ export const getNightSummary = (nightLog: NightLog): NightSummary => {
  * This is a stub for future schema upgrades.
  * Call this on app startup before loading logs.
  */
-const migrateIfNeeded = async (): Promise<void> => {
+export const migrateIfNeeded = async (): Promise<void> => {
 	try {
 		const storedVersion = await AsyncStorage.getItem(STORAGE_VERSION_KEY);
 		const parsedVersion = storedVersion ? parseInt(storedVersion, 10) : 0;
