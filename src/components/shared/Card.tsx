@@ -6,19 +6,29 @@ import tokens from '@/components/tokens';
 type Props = {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  glowAccent?: boolean;
 };
 
-export default function Card({ children, style }: Props) {
-  return <View style={[styles.card, style]}>{children}</View>;
+export default function Card({ children, style, glowAccent }: Props) {
+  return (
+    <View
+      style={[
+        styles.card,
+        glowAccent && { backgroundColor: tokens.COLORS.ACCENT_GLOW },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: tokens.COLORS.SURFACE,
+    backgroundColor: tokens.COLORS.SURFACE_ELEVATED,
     borderWidth: 1,
     borderColor: tokens.COLORS.BORDER,
-    borderRadius: tokens.RADIUS.LG,
-    padding: tokens.SPACING.LG,
-    ...tokens.SHADOWS.CARD,
+    borderRadius: tokens.RADIUS.XL,
+    padding: tokens.SPACING.XL,
   },
 });
