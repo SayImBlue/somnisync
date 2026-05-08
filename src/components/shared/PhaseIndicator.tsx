@@ -20,52 +20,35 @@ export default function PhaseIndicator({ phase, confidence = 0 }: Props) {
       case 'TRANSITIONAL':
         return { color: tokens.COLORS.PHASE_TRANSITIONAL };
       case 'SIGNAL_LOST':
-        return { color: tokens.COLORS.PHASE_SIGNAL_LOST };
+        return { color: tokens.COLORS.SIGNAL_LOST };
       default:
         return { color: tokens.COLORS.TEXT_DIM };
     }
   }, [phase]);
 
   return (
-    <View style={[styles.container, { borderColor: config.color, shadowColor: config.color }]}> 
-      <View style={[styles.dot, { backgroundColor: config.color }]} />
-      <Text style={styles.phase}>{phase}</Text>
-      <Text style={styles.confidence}>· {Math.round(confidence * 100)}%</Text>
+    <View style={[styles.pill, { borderColor: config.color }]}>
+      <Text style={[styles.text, { color: config.color }]}>
+        {phase}
+        {' · '}
+        {Math.round(confidence * 100)}%
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: tokens.SPACING.SM,
-    paddingHorizontal: tokens.SPACING.MD,
-    paddingVertical: tokens.SPACING.SM,
+  pill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: tokens.RADIUS.FULL,
     borderWidth: 1,
-    backgroundColor: tokens.COLORS.SURFACE,
-    shadowOpacity: 0.16,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 2,
+    backgroundColor: tokens.COLORS.ACCENT_DIM,
   },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: tokens.RADIUS.FULL,
-  },
-  phase: {
-    color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
+  text: {
+    fontSize: tokens.FONT_SIZES.XS,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    letterSpacing: 2,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  confidence: {
-    color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
   },
 });
