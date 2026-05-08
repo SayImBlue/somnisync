@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 
 import Card from '@/components/shared/Card';
 import ConnectionIndicator from '@/components/shared/ConnectionIndicator';
@@ -9,11 +9,11 @@ import { useSensorData, useSleepPhase, useAlarmStatus, useBleConnection } from '
 import useSleepStore from '@/stores/sleepStore';
 import useBleStore from '@/stores/bleStore';
 
-const PHASE_ORDER = {
-  AWAKE: 0,
-  TRANSITIONAL: 0.33,
-  LIGHT: 0.58,
-  DEEP: 1,
+const PHASE_DEPTH = {
+  AWAKE: 0.04,
+  TRANSITIONAL: 0.2,
+  LIGHT: 0.5,
+  DEEP: 0.96,
   SIGNAL_LOST: 0,
 } as const;
 
@@ -24,174 +24,211 @@ export function DashboardScreen() {
   const ble = useBleConnection();
   const sleepConfidence = useSleepStore((state) => state.confidenceScore);
   const startScan = useBleStore((state) => state.startScan);
+  
+  const [liveTime, setLiveTime] = useState<string>(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 
-  const depth = PHASE_ORDER[phase as keyof typeof PHASE_ORDER] ?? 0;
-  const nextAlarmText = alarm.config?.targetTime ? new Date(alarm.config.targetTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No alarm set';
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const depth = PHASE_DEPTH[phase as keyof typeof PHASE_DEPTH] ?? 0;
   const connected = ble.connectionState === 'connected';
+  const alarmTime = alarm.config?.targetTime ? new Date(alarm.config.targetTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
 
-  const phaseStyle = useMemo(() => {
+  const phaseColor = useMemo(() => {
     switch (phase) {
       case 'LIGHT':
-        return styles.phaseLight;
+        return tokens.COLORS.PHASE_LIGHT;
       case 'DEEP':
-        return styles.phaseDeep;
+        return tokens.COLORS.PHASE_DEEP;
       case 'AWAKE':
-        return styles.phaseAwake;
+        return tokens.COLORS.PHASE_AWAKE;
       case 'TRANSITIONAL':
-        return styles.phaseTransitional;
+        return tokens.COLORS.PHASE_TRANSITIONAL;
       default:
-        return styles.phaseLost;
+        return tokens.COLORS.TEXT_DIM;
     }
   }, [phase]);
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.container}>
+      {/* Header Row */}
       <View style={styles.headerRow}>
-        <Text style={styles.brand}>SomniSync</Text>
+        <Text style={styles.brand}>SOMNISYNC</Text>
         <ConnectionIndicator />
       </View>
 
-      <Card style={styles.phaseCard}>
-        <View style={styles.phaseGlow} />
-        <Text style={[styles.phaseLabel, phaseStyle]}>{phase}</Text>
-        <Text style={styles.phaseConfidence}>{Math.round(sleepConfidence * 100)}% confidence</Text>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(1, depth)) * 100}%` }]} />
+      {/* Hero Card with Live Time */}
+      <Card style={styles.heroCard}>
+        <Text style={styles.liveTime}>{liveTime}</Text>
+        <Text style={[styles.phaseName, { color: phaseColor }]}>{phase}</Text>
+        
+        {/* Sleep Depth Bar */}
+        <View style={styles.depthBarContainer}>
+          <View style={styles.depthBarBg}>
+            <View style={[styles.depthBarFill, { width: `${Math.max(0, Math.min(1, depth)) * 100}%` }]} />
+          </View>
         </View>
+        
+        <Text style={styles.confidence}>{Math.round(sleepConfidence * 100)}% confidence</Text>
       </Card>
 
+      {/* Sensor Row */}
       <View style={styles.sensorRow}>
-        <SensorTile label="Temperature" value={sensor?.temperature ?? '--'} unit="°C" iconName="thermometer" timestamp={sensor?.timestamp} />
-        <SensorTile label="Luminosity" value={sensor?.luminosity ?? '--'} unit="lux" iconName="white-balance-sunny" timestamp={sensor?.timestamp} />
+        <SensorTile 
+          label="Temperature" 
+          value={sensor?.temperature ?? '--'} 
+          unit="°C" 
+          iconName="thermometer" 
+        />
+        <SensorTile 
+          label="Luminosity" 
+          value={sensor?.luminosity ?? '--'} 
+          unit="lux" 
+          iconName="sun" 
+        />
       </View>
 
-      <Card style={styles.alarmCard}>
-        <Text style={styles.cardLabel}>Next alarm</Text>
-        <Text style={[styles.alarmTime, !alarm.config?.targetTime && styles.alarmTimeDim]}>
-          {nextAlarmText}
-        </Text>
-        {!connected ? (
-          <TouchableOpacity style={styles.connectButton} onPress={startScan}>
-            <Text style={styles.connectButtonText}>Tap to connect</Text>
-          </TouchableOpacity>
-        ) : null}
-      </Card>
-    </View>
+      {/* Signal Lost Banner */}
+      {phase === 'SIGNAL_LOST' && (
+        <View style={styles.signalLostBanner}>
+          <Text style={styles.signalLostText}>Signal lost · Check microphone permissions</Text>
+        </View>
+      )}
+
+      {/* Next Alarm or Connect Button */}
+      {connected ? (
+        <View style={styles.alarmSection}>
+          <Text style={styles.alarmLabel}>NEXT ALARM</Text>
+          <Text style={[styles.alarmTime, !alarm.config?.targetTime && styles.alarmTimeDim]}>
+            {alarmTime}
+          </Text>
+        </View>
+      ) : (
+        <TouchableOpacity style={styles.connectButtonRow} onPress={() => { void startScan(); }}>
+          <Text style={styles.connectButtonText}>Connect Device</Text>
+        </TouchableOpacity>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContainer: {
     flex: 1,
     backgroundColor: tokens.COLORS.BACKGROUND,
-    padding: tokens.SPACING.LG,
-    gap: tokens.SPACING.LG,
+  },
+  container: {
+    padding: tokens.SPACING.XL,
+    gap: tokens.SPACING.XL,
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
   },
   brand: {
-    color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.XL,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-    letterSpacing: -0.4,
-  },
-  phaseCard: {
-    position: 'relative',
-    overflow: 'hidden',
-    backgroundColor: tokens.COLORS.SURFACE_ELEVATED,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: tokens.SPACING.XXL,
-    minHeight: 250,
-  },
-  phaseGlow: {
-    position: 'absolute',
-    width: 280,
-    height: 280,
-    borderRadius: tokens.RADIUS.FULL,
-    backgroundColor: tokens.COLORS.ACCENT_GLOW,
-    top: -40,
-  },
-  phaseLabel: {
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-    fontSize: 48,
-    letterSpacing: -1.5,
+    color: tokens.COLORS.TEXT_SECONDARY,
+    fontSize: tokens.FONT_SIZES.XS,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    letterSpacing: 5,
     textTransform: 'uppercase',
+  },
+  heroCard: {
+    alignItems: 'center',
+    paddingVertical: tokens.SPACING.XL,
+    marginTop: tokens.SPACING.XL,
+  },
+  liveTime: {
+    fontSize: tokens.FONT_SIZES.DISPLAY,
+    fontFamily: tokens.TYPOGRAPHY.display,
+    color: tokens.COLORS.TEXT_PRIMARY,
+    textAlign: 'center',
+    letterSpacing: -1.2,
+  },
+  phaseName: {
+    fontSize: tokens.FONT_SIZES.LG,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    marginTop: tokens.SPACING.SM,
     textAlign: 'center',
   },
-  phaseLight: {
-    color: tokens.COLORS.PHASE_LIGHT,
-  },
-  phaseDeep: {
-    color: tokens.COLORS.PHASE_DEEP,
-  },
-  phaseAwake: {
-    color: tokens.COLORS.PHASE_AWAKE,
-  },
-  phaseTransitional: {
-    color: tokens.COLORS.PHASE_TRANSITIONAL,
-  },
-  phaseLost: {
-    color: tokens.COLORS.PHASE_SIGNAL_LOST,
-  },
-  phaseConfidence: {
-    marginTop: tokens.SPACING.SM,
-    color: tokens.COLORS.TEXT_SECONDARY,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
-    fontSize: tokens.FONT_SIZES.SM,
-  },
-  progressTrack: {
-    marginTop: tokens.SPACING.LG,
+  depthBarContainer: {
+    marginTop: tokens.SPACING.MD,
     width: '100%',
-    height: 3,
-    borderRadius: tokens.RADIUS.FULL,
+  },
+  depthBarBg: {
+    height: 2,
     backgroundColor: tokens.COLORS.BORDER,
+    borderRadius: tokens.RADIUS.FULL,
     overflow: 'hidden',
   },
-  progressFill: {
+  depthBarFill: {
     height: '100%',
-    borderRadius: tokens.RADIUS.FULL,
     backgroundColor: tokens.COLORS.ACCENT,
+    borderRadius: tokens.RADIUS.FULL,
+  },
+  confidence: {
+    marginTop: tokens.SPACING.SM,
+    fontSize: tokens.FONT_SIZES.XS,
+    color: tokens.COLORS.TEXT_DIM,
+    textAlign: 'right',
+    width: '100%',
   },
   sensorRow: {
     flexDirection: 'row',
     gap: tokens.SPACING.MD,
+    marginTop: tokens.SPACING.XL,
   },
-  alarmCard: {
-    gap: tokens.SPACING.SM,
+  signalLostBanner: {
+    borderLeftWidth: 3,
+    borderLeftColor: tokens.COLORS.DANGER,
+    backgroundColor: tokens.COLORS.SURFACE,
+    padding: tokens.SPACING.MD,
+    borderRadius: tokens.RADIUS.SM,
+    marginTop: tokens.SPACING.MD,
   },
-  cardLabel: {
-    color: tokens.COLORS.TEXT_SECONDARY,
+  signalLostText: {
+    fontSize: tokens.FONT_SIZES.SM,
+    color: tokens.COLORS.DANGER,
+    fontFamily: tokens.TYPOGRAPHY.body,
+  },
+  alarmSection: {
+    marginTop: tokens.SPACING.XL,
+  },
+  alarmLabel: {
     fontSize: tokens.FONT_SIZES.XS,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
-    letterSpacing: 1.4,
+    letterSpacing: 4,
+    color: tokens.COLORS.TEXT_SECONDARY,
     textTransform: 'uppercase',
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    marginBottom: tokens.SPACING.MD,
   },
   alarmTime: {
-    color: tokens.COLORS.TEXT_PRIMARY,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
     fontSize: tokens.FONT_SIZES.XXL,
-    letterSpacing: -0.5,
+    fontFamily: tokens.TYPOGRAPHY.display,
+    color: tokens.COLORS.TEXT_PRIMARY,
   },
   alarmTimeDim: {
     color: tokens.COLORS.TEXT_DIM,
   },
-  connectButton: {
-    marginTop: tokens.SPACING.SM,
-    alignSelf: 'center',
-    borderRadius: tokens.RADIUS.FULL,
+  connectButtonRow: {
     borderWidth: 1,
-    borderColor: tokens.COLORS.ACCENT,
-    paddingHorizontal: tokens.SPACING.LG,
-    paddingVertical: tokens.SPACING.SM,
+    borderColor: tokens.COLORS.BORDER_BRIGHT,
+    borderRadius: tokens.RADIUS.XL,
+    padding: tokens.SPACING.LG,
+    alignItems: 'center',
+    marginTop: tokens.SPACING.XL,
   },
   connectButtonText: {
+    fontSize: tokens.FONT_SIZES.LG,
+    fontFamily: tokens.TYPOGRAPHY.medium,
     color: tokens.COLORS.ACCENT,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
-    letterSpacing: 0.6,
+    textAlign: 'center',
   },
 });
 
