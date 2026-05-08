@@ -1,26 +1,23 @@
 import React, { useMemo, useState } from 'react';
-import { Text, View, StyleSheet, Pressable, TextInput } from 'react-native';
+import { Text, View, StyleSheet, Pressable, ScrollView, TouchableOpacity } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
-import Card from '@/components/shared/Card';
+import ConnectionIndicator from '@/components/shared/ConnectionIndicator';
 import tokens from '@/components/tokens';
 import { CONFIG } from '@/config';
 import useBleStore from '@/stores/bleStore';
 import useAlarmStore from '@/stores/alarmStore';
 import useSleepStore from '@/stores/sleepStore';
-import { useSensorData } from '@/hooks';
 import { clearNightLogs } from '@/services/storage/nightLogStorage';
 
-const WAKE_WINDOW_OPTIONS = [15, 20, 30];
 const APP_VERSION = '1.0.0';
-const BUILD_NUMBER = '1';
+const BUILD_NUMBER = 'MVP';
 
 export function SettingsScreen() {
   const bleConnectionState = useBleStore((state) => state.connectionState);
   const bleConnectedDeviceId = useBleStore((state) => state.connectedDeviceId);
-  const bleError = useBleStore((state) => state.error);
-  const startScan = useBleStore((state) => state.startScan);
   const disconnect = useBleStore((state) => state.disconnect);
+  const startScan = useBleStore((state) => state.startScan);
 
   const alarmConfig = useAlarmStore((state) => state.config);
   const setAlarm = useAlarmStore((state) => state.setAlarm);
@@ -28,49 +25,10 @@ export function SettingsScreen() {
   const recalculateAfterTimezoneChange = useAlarmStore((state) => state.recalculateAfterTimezoneChange);
 
   const resetNight = useSleepStore((state) => state.resetNight);
-  const sensor = useSensorData();
 
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [tempTarget, setTempTarget] = useState<string>('21.5');
-
-  const connectionLabel = useMemo(() => {
-    if (!bleConnectedDeviceId) {
-      return bleConnectionState;
-    }
-    return `${bleConnectionState} (${bleConnectedDeviceId})`;
-  }, [bleConnectionState, bleConnectedDeviceId]);
-
-  const signalStrength = useMemo(() => {
-    if (bleConnectionState !== 'connected') {
-      return 'Offline';
-    }
-    if (!sensor) {
-      return 'Unknown';
-    }
-
-    const ageMs = Date.now() - sensor.timestamp;
-    if (ageMs < 5000) {
-      return 'Strong';
-    }
-    if (ageMs < 15000) {
-      return 'Fair';
-    }
-    return 'Weak';
-  }, [bleConnectionState, sensor]);
-
-  const onWakeWindowSelect = (minutes: number) => {
-    if (!alarmConfig.targetTime) {
-      setStatusMessage('Set an alarm time before saving wake window preferences.');
-      return;
-    }
-
-    setAlarm({
-      ...alarmConfig,
-      windowMinutes: minutes,
-      enabled: alarmConfig.enabled,
-    });
-    setStatusMessage(`Wake window set to ±${minutes} min.`);
-  };
+  const [wakeWindow, setWakeWindow] = useState<number>(alarmConfig.windowMinutes ?? 30);
 
   const onRequestNotificationPermission = async () => {
     const current = await Notifications.getPermissionsAsync();
@@ -113,85 +71,106 @@ export function SettingsScreen() {
     setStatusMessage('Stored sleep history cleared.');
   };
 
+  const handleWakeWindowChange = (minutes: number) => {
+    setWakeWindow(minutes);
+    setAlarm({
+      ...alarmConfig,
+      windowMinutes: minutes,
+    });
+  };
+
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.container}>
       <Text style={styles.title}>Settings</Text>
-      <Text style={styles.subtitle}>Device, preference, and app information.</Text>
 
-      <Card style={styles.sectionCard}>
+      {/* DEVICE Section */}
+      <View style={styles.section}>
         <Text style={styles.sectionLabel}>DEVICE</Text>
-        <SettingRow label="Device ID" value={bleConnectedDeviceId ?? 'None'} />
-        <SettingRow label="Signal strength" value={signalStrength} />
-        <SettingRow label="Connection" value={connectionLabel} />
-        <View style={styles.rowButtons}>
-          <ActionButton label="Scan" onPress={() => { void onReconnect(); }} />
-          <ActionButton label="Forget device" onPress={() => { void onDisconnect(); }} tone="danger" />
-        </View>
-        {bleError ? <Text style={styles.errorText}>{bleError}</Text> : null}
-      </Card>
+        <SettingRow label="Device ID" value={bleConnectedDeviceId ?? 'None'} dim />
+        <SettingRow label="Status" control={<ConnectionIndicator />} />
+        <TouchableOpacity
+          style={styles.actionRow}
+          onPress={() => { void onDisconnect(); }}
+        >
+          <Text style={styles.actionRowLabel}>Disconnect Device</Text>
+          <Text style={styles.actionRowValue}>Remove</Text>
+        </TouchableOpacity>
+      </View>
 
-      <Card style={styles.sectionCard}>
+      {/* PREFERENCES Section */}
+      <View style={styles.section}>
         <Text style={styles.sectionLabel}>PREFERENCES</Text>
+        <SettingRow label="Temperature Target" value={`${tempTarget}°C`} />
         <SettingRow
-          label="Temp target"
+          label="Wake Window"
+          value={`±${wakeWindow} min`}
           control={(
-            <TextInput
-              style={styles.input}
-              value={tempTarget}
-              onChangeText={setTempTarget}
-              keyboardType="decimal-pad"
-              placeholder="21.5"
-              placeholderTextColor={tokens.COLORS.TEXT_DIM}
-              selectionColor={tokens.COLORS.ACCENT}
-            />
-          )}
-        />
-        <SettingRow
-          label="Wake window"
-          control={(
-            <View style={styles.selectorRow}>
-              {WAKE_WINDOW_OPTIONS.map((minutes) => {
-                const active = alarmConfig.windowMinutes === minutes;
-                return (
-                  <Pressable
-                    key={minutes}
-                    style={[styles.selectorPill, active && styles.selectorPillActive]}
-                    onPress={() => onWakeWindowSelect(minutes)}
+            <View style={styles.windowSelector}>
+              {[15, 20, 30].map((minutes) => (
+                <TouchableOpacity
+                  key={minutes}
+                  style={[
+                    styles.windowPill,
+                    wakeWindow === minutes && styles.windowPillActive,
+                  ]}
+                  onPress={() => handleWakeWindowChange(minutes)}
+                >
+                  <Text
+                    style={[
+                      styles.windowPillText,
+                      wakeWindow === minutes && styles.windowPillTextActive,
+                    ]}
                   >
-                    <Text style={[styles.selectorPillText, active && styles.selectorPillTextActive]}>{`±${minutes}`}</Text>
-                  </Pressable>
-                );
-              })}
+                    {minutes}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         />
-      </Card>
+      </View>
 
-      <Card style={styles.sectionCard}>
+      {/* ABOUT Section */}
+      <View style={styles.section}>
         <Text style={styles.sectionLabel}>ABOUT</Text>
-        <SettingRow label="App version" value={APP_VERSION} />
-        <SettingRow label="Build number" value={BUILD_NUMBER} />
-      </Card>
+        <SettingRow label="Version" value={APP_VERSION} dim />
+        <SettingRow label="Build" value={BUILD_NUMBER} dim isLast />
+      </View>
 
-      <Card style={styles.sectionCard}>
+      {/* TOOLS Section */}
+      <View style={styles.section}>
         <Text style={styles.sectionLabel}>TOOLS</Text>
         <ActionButton label="Enable notifications" onPress={() => { void onRequestNotificationPermission(); }} />
         <ActionButton label="Recalculate timezone" onPress={onRecalculateTimezone} />
         <ActionButton label="Clear alarm state" onPress={onClearAlarm} tone="danger" />
         <ActionButton label="Reset current night" onPress={onResetCurrentNight} />
         <ActionButton label="Clear sleep history" onPress={() => { void onClearHistory(); }} tone="danger" />
-      </Card>
+      </View>
 
       {statusMessage ? <Text style={styles.statusMessage}>{statusMessage}</Text> : null}
-    </View>
+    </ScrollView>
   );
 }
 
-function SettingRow({ label, value, control }: { label: string; value?: string; control?: React.ReactNode }) {
+function SettingRow({
+  label,
+  value,
+  control,
+  dim = false,
+  isLast = false,
+}: {
+  label: string;
+  value?: string;
+  control?: React.ReactNode;
+  dim?: boolean;
+  isLast?: boolean;
+}) {
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, !isLast && styles.rowBorder]}>
       <Text style={styles.rowLabel}>{label}</Text>
-      {control ?? <Text style={styles.rowValue}>{value}</Text>}
+      {control ?? (
+        <Text style={[styles.rowValue, dim && styles.rowValueDim]}>{value}</Text>
+      )}
     </View>
   );
 }
@@ -203,126 +182,129 @@ function ActionButton({
 }: {
   label: string;
   onPress: () => void;
-  tone?: 'primary' | 'secondary' | 'danger';
+  tone?: 'primary' | 'danger';
 }) {
   return (
-    <Pressable
+    <TouchableOpacity
       style={[
         styles.actionButton,
-        tone === 'secondary' && styles.actionButtonSecondary,
         tone === 'danger' && styles.actionButtonDanger,
       ]}
       onPress={onPress}
     >
-      <Text style={styles.actionButtonText}>{label}</Text>
-    </Pressable>
+      <Text
+        style={[
+          styles.actionButtonText,
+          tone === 'danger' && styles.actionButtonTextDanger,
+        ]}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContainer: {
     flex: 1,
     backgroundColor: tokens.COLORS.BACKGROUND,
-    padding: tokens.SPACING.LG,
-    gap: tokens.SPACING.MD,
+  },
+  container: {
+    padding: tokens.SPACING.XL,
+    paddingBottom: tokens.SPACING.XXL,
+    gap: tokens.SPACING.XL,
   },
   title: {
+    fontSize: tokens.FONT_SIZES.XXL,
+    fontFamily: tokens.TYPOGRAPHY.display,
     color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.XL,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
-  subtitle: {
-    marginTop: tokens.SPACING.XS,
-    marginBottom: tokens.SPACING.SM,
-    color: tokens.COLORS.TEXT_SECONDARY,
-    fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.BODY,
-  },
-  sectionCard: {
-    gap: tokens.SPACING.SM,
+  section: {
+    marginTop: tokens.SPACING.XXL,
+    gap: 0,
   },
   sectionLabel: {
-    color: tokens.COLORS.TEXT_SECONDARY,
     fontSize: tokens.FONT_SIZES.XS,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
-    letterSpacing: 1.5,
+    letterSpacing: 4,
+    color: tokens.COLORS.TEXT_SECONDARY,
     textTransform: 'uppercase',
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    marginBottom: tokens.SPACING.MD,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: tokens.SPACING.SM,
+    paddingVertical: tokens.SPACING.LG,
+  },
+  rowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: tokens.COLORS.BORDER,
   },
   rowLabel: {
-    color: tokens.COLORS.TEXT_SECONDARY,
     fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.BODY,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    color: tokens.COLORS.TEXT_PRIMARY,
   },
   rowValue: {
-    color: tokens.COLORS.TEXT_PRIMARY,
     fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
-    maxWidth: '55%',
-    textAlign: 'right',
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    color: tokens.COLORS.TEXT_SECONDARY,
   },
-  rowButtons: {
+  rowValueDim: {
+    color: tokens.COLORS.TEXT_DIM,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: tokens.SPACING.LG,
+    borderBottomWidth: 1,
+    borderBottomColor: tokens.COLORS.BORDER,
+  },
+  actionRowLabel: {
+    fontSize: tokens.FONT_SIZES.SM,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    color: tokens.COLORS.TEXT_PRIMARY,
+  },
+  actionRowValue: {
+    fontSize: tokens.FONT_SIZES.SM,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    color: tokens.COLORS.DANGER,
+  },
+  windowSelector: {
     flexDirection: 'row',
     gap: tokens.SPACING.SM,
-    paddingTop: tokens.SPACING.SM,
   },
-  input: {
-    minWidth: 92,
-    color: tokens.COLORS.TEXT_PRIMARY,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
-    fontSize: tokens.FONT_SIZES.SM,
+  windowPill: {
     borderWidth: 1,
     borderColor: tokens.COLORS.BORDER,
     backgroundColor: tokens.COLORS.SURFACE,
-    borderRadius: tokens.RADIUS.FULL,
     paddingHorizontal: tokens.SPACING.MD,
     paddingVertical: tokens.SPACING.SM,
-    textAlign: 'right',
-  },
-  selectorRow: {
-    flexDirection: 'row',
-    gap: tokens.SPACING.SM,
-  },
-  selectorPill: {
-    borderWidth: 1,
-    borderWidth: 1,
-    borderColor: tokens.COLORS.BORDER,
-    backgroundColor: tokens.COLORS.SURFACE,
-    paddingHorizontal: tokens.SPACING.SM,
-    paddingVertical: tokens.SPACING.SM,
     borderRadius: tokens.RADIUS.FULL,
   },
-  selectorPillActive: {
+  windowPillActive: {
     backgroundColor: tokens.COLORS.ACCENT,
     borderColor: tokens.COLORS.ACCENT,
   },
-  selectorPillText: {
-    color: tokens.COLORS.TEXT_SECONDARY,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
+  windowPillText: {
     fontSize: tokens.FONT_SIZES.XS,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    color: tokens.COLORS.TEXT_SECONDARY,
   },
-  selectorPillTextActive: {
-    color: tokens.COLORS.WHITE,
+  windowPillTextActive: {
+    color: tokens.COLORS.TEXT_PRIMARY,
   },
   actionButton: {
-    flex: 1,
-    marginTop: tokens.SPACING.XS,
-    borderRadius: tokens.RADIUS.FULL,
+    width: '100%',
     backgroundColor: tokens.COLORS.ACCENT,
-    paddingVertical: tokens.SPACING.SM,
+    borderRadius: tokens.RADIUS.XL,
+    paddingVertical: tokens.SPACING.LG,
     paddingHorizontal: tokens.SPACING.MD,
     alignItems: 'center',
-  },
-  actionButtonSecondary: {
-    backgroundColor: tokens.COLORS.SURFACE_ELEVATED,
+    marginTop: tokens.SPACING.MD,
   },
   actionButtonDanger: {
     backgroundColor: 'transparent',
@@ -330,20 +312,19 @@ const styles = StyleSheet.create({
     borderColor: tokens.COLORS.DANGER,
   },
   actionButtonText: {
+    fontSize: tokens.FONT_SIZES.SM,
+    fontFamily: tokens.TYPOGRAPHY.medium,
     color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
+    textAlign: 'center',
   },
-  errorText: {
-    marginTop: tokens.SPACING.SM,
+  actionButtonTextDanger: {
     color: tokens.COLORS.DANGER,
-    fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.BODY,
   },
   statusMessage: {
-    marginTop: tokens.SPACING.SM,
+    marginTop: tokens.SPACING.MD,
     color: tokens.COLORS.SUCCESS,
     fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    textAlign: 'center',
   },
 });
