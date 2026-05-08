@@ -1,27 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Switch, Platform, TouchableOpacity } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, ScrollView, Modal, Platform } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
 import Card from '@/components/shared/Card';
 import tokens from '@/components/tokens';
 import useAlarmStore from '@/stores/alarmStore';
 
-const WINDOW_OPTIONS = [15, 20, 30];
+const WAKE_WINDOW_OPTIONS = [15, 20, 30];
 
 const toInitialTime = (targetTime: string): Date => {
   const parsed = targetTime ? new Date(targetTime) : null;
   return parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date();
 };
 
-const formatTimeLabel = (time: Date): string =>
-  time.toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-
-const normalizeWindowMinutes = (windowMinutes: number | undefined): number =>
-  WINDOW_OPTIONS.includes(windowMinutes ?? 0) ? (windowMinutes as number) : 30;
+const formatTime = (date: Date): string =>
+  date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
 export function AlarmScreen() {
   const config = useAlarmStore((state) => state.config);
@@ -34,30 +27,28 @@ export function AlarmScreen() {
   const stopWakeSequence = useAlarmStore((state) => state.stopWakeSequence);
 
   const [time, setTime] = useState<Date>(toInitialTime(config.targetTime));
-  const [windowMinutes, setWindowMinutes] = useState<number>(normalizeWindowMinutes(config.windowMinutes));
+  const [windowMinutes, setWindowMinutes] = useState<number>(config.windowMinutes ?? 30);
   const [enabled, setEnabled] = useState<boolean>(config.enabled);
   const [showPicker, setShowPicker] = useState<boolean>(false);
-  const [confirmationMessage, setConfirmationMessage] = useState<string>('');
-  const confirmationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const togglePosition = useRef(new Animated.Value(enabled ? 1 : 0)).current;
   const isWakeOverlayVisible = engineState === 'wake-sequence' || engineState === 'triggered';
 
-  const nextAlarmLabel = useMemo(() => {
-    if (!config.targetTime) {
-      return 'No alarm set';
-    }
-    return formatTimeLabel(new Date(config.targetTime));
-  }, [config.targetTime]);
+  const handleToggleEnable = () => {
+    const newValue = !enabled;
+    setEnabled(newValue);
 
-  const wakeWindowLabel = useMemo(() => `Wake window ±${windowMinutes} min`, [windowMinutes]);
+    Animated.timing(togglePosition, {
+      toValue: newValue ? 1 : 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start();
+  };
 
-  useEffect(() => {
-    return () => {
-      if (confirmationTimeoutRef.current) {
-        clearTimeout(confirmationTimeoutRef.current);
-      }
-    };
-  }, []);
+  const toggleTranslate = togglePosition.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 18],
+  });
 
   const onTimeChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
     if (selectedDate) {
@@ -69,269 +60,287 @@ export function AlarmScreen() {
   };
 
   const onSave = () => {
-    const nextConfig = {
+    setAlarm({
       targetTime: time.toISOString(),
       windowMinutes,
       enabled: true,
-    };
-
-    setAlarm(nextConfig);
+    });
     setEnabled(true);
     armAlarm();
-
-    if (confirmationTimeoutRef.current) {
-      clearTimeout(confirmationTimeoutRef.current);
-    }
-    setConfirmationMessage(`Alarm set for ${formatTimeLabel(time)}`);
-    confirmationTimeoutRef.current = setTimeout(() => {
-      setConfirmationMessage('');
-      confirmationTimeoutRef.current = null;
-    }, 2500);
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Alarm</Text>
+    <>
+      <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.container}>
+        {/* Header */}
+        <Text style={styles.title}>Alarm</Text>
 
-      <Card style={styles.timeCard}>
-        <Text style={styles.sectionLabel}>Wake Time</Text>
-        <TouchableOpacity style={styles.timeButton} onPress={() => setShowPicker(true)}>
-          <Text style={styles.timeButtonText}>{formatTimeLabel(time)}</Text>
+        {/* Time Display Card */}
+        <TouchableOpacity
+          style={styles.timeCard}
+          onPress={() => setShowPicker(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.displayTime}>{formatTime(time)}</Text>
+          <Text style={styles.tapToChange}>Tap to change</Text>
         </TouchableOpacity>
-        <Text style={styles.timeSubtext}>{wakeWindowLabel}</Text>
+
+        {/* Date Time Picker */}
         {showPicker && (
           <DateTimePicker
             value={time}
             mode="time"
-            is24Hour={false}
+            is24Hour
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={onTimeChange}
           />
         )}
-      </Card>
 
-      <Card style={styles.windowCard}>
-        <Text style={styles.sectionLabel}>Wake Window</Text>
-        <View style={styles.pillsRow}>
-          {WINDOW_OPTIONS.map((option) => {
-            const active = option === windowMinutes;
-            return (
-              <Pressable
-                key={option}
-                style={[styles.pill, active && styles.pillActive]}
-                onPress={() => setWindowMinutes(option)}
-              >
-                <Text style={[styles.pillText, active && styles.pillTextActive]}>{`±${option} min`}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Card>
-
-      <Card style={styles.toggleCard}>
-        <View style={styles.toggleRow}>
-          <View>
-            <Text style={styles.sectionLabel}>Enable Alarm</Text>
-            <Text style={styles.muted}>Next: {nextAlarmLabel}</Text>
+        {/* Wake Window Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionLabel}>WAKE WINDOW</Text>
+          <View style={styles.wakeWindowRow}>
+            {WAKE_WINDOW_OPTIONS.map((minutes) => {
+              const active = minutes === windowMinutes;
+              return (
+                <TouchableOpacity
+                  key={minutes}
+                  style={[
+                    styles.wakePill,
+                    active ? styles.wakePillActive : styles.wakePillInactive,
+                  ]}
+                  onPress={() => setWindowMinutes(minutes)}
+                >
+                  <Text style={[styles.wakePillText, active && styles.wakePillTextActive]}>
+                    {`± ${minutes} min`}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-          <Switch
-            value={enabled}
-            onValueChange={setEnabled}
-            trackColor={{ false: tokens.COLORS.BORDER, true: tokens.COLORS.ACCENT }}
-            thumbColor={tokens.COLORS.TEXT_PRIMARY}
-          />
         </View>
-      </Card>
 
-      <Pressable style={styles.saveButton} onPress={onSave}>
-        <Text style={styles.saveButtonText}>Save Alarm</Text>
-      </Pressable>
+        {/* Enable Row */}
+        <View style={styles.enableRow}>
+          <Text style={styles.enableLabel}>Enable Alarm</Text>
+          <TouchableOpacity
+            style={[
+              styles.togglePill,
+              { backgroundColor: enabled ? tokens.COLORS.ACCENT : tokens.COLORS.BORDER },
+            ]}
+            onPress={handleToggleEnable}
+          >
+            <Animated.View
+              style={[
+                styles.toggleCircle,
+                {
+                  transform: [{ translateX: toggleTranslate }],
+                  backgroundColor: enabled ? tokens.COLORS.WHITE : tokens.COLORS.TEXT_DIM,
+                },
+              ]}
+            />
+          </TouchableOpacity>
+        </View>
 
-      {confirmationMessage ? <Text style={styles.confirmationText}>{confirmationMessage}</Text> : null}
+        {/* Save Button */}
+        <TouchableOpacity style={styles.saveButton} onPress={onSave}>
+          <Text style={styles.saveButtonText}>Save Alarm</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
+      {/* Wake Overlay Modal */}
       {isWakeOverlayVisible && (
-        <View style={styles.overlay}>
-          <View style={styles.overlayCard}>
-            <Text style={styles.overlayTime}>{formatTimeLabel(time)}</Text>
-            <Text style={styles.overlayTitle}>Time to wake up</Text>
-            <Text style={styles.overlayText}>{Math.round(wakeSequenceProgress * 100)}% of wake sequence complete</Text>
-            <View style={styles.overlayActions}>
-              <Pressable
-                style={[styles.overlayButton, styles.outlinedButton]}
+        <Modal transparent visible={isWakeOverlayVisible}>
+          <View style={styles.overlayContainer}>
+            <Text style={styles.overlayTime}>{formatTime(time)}</Text>
+            <Text style={styles.overlaySubtitle}>Time to wake up</Text>
+
+            <View style={styles.overlayButtons}>
+              <TouchableOpacity
+                style={styles.snoozeButton}
+                onPress={() => { void snooze(); }}
+              >
+                <Text style={styles.snoozeButtonText}>Snooze</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.dismissButton}
                 onPress={() => {
-                  snooze();
+                  void stopWakeSequence();
+                  void disarmAlarm();
                 }}
               >
-                <Text style={styles.outlinedButtonText}>Snooze</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.overlayButton, styles.dismissButton]}
-                onPress={() => {
-                  stopWakeSequence();
-                  disarmAlarm();
-                }}
-              >
-                <Text style={styles.overlayButtonText}>Dismiss</Text>
-              </Pressable>
+                <Text style={styles.dismissButtonText}>Dismiss</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </Modal>
       )}
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContainer: {
     flex: 1,
     backgroundColor: tokens.COLORS.BACKGROUND,
-    padding: tokens.SPACING.LG,
-    gap: tokens.SPACING.LG,
+  },
+  container: {
+    padding: tokens.SPACING.XL,
+    gap: tokens.SPACING.XL,
   },
   title: {
+    fontSize: tokens.FONT_SIZES.XXL,
+    fontFamily: tokens.TYPOGRAPHY.display,
     color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.XL,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
   timeCard: {
-    alignItems: 'center',
-    gap: tokens.SPACING.SM,
-  },
-  windowCard: {
-    gap: tokens.SPACING.SM,
-  },
-  toggleCard: {
-    gap: tokens.SPACING.SM,
-  },
-  sectionLabel: {
-    color: tokens.COLORS.TEXT_SECONDARY,
-    fontSize: tokens.FONT_SIZES.XS,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-  timeButton: {
-    paddingVertical: tokens.SPACING.SM,
-    paddingHorizontal: tokens.SPACING.SM,
+    backgroundColor: tokens.COLORS.SURFACE_ELEVATED,
+    borderWidth: 1,
+    borderColor: tokens.COLORS.BORDER,
+    borderRadius: tokens.RADIUS.XXL,
+    padding: tokens.SPACING.XL,
+    marginTop: tokens.SPACING.XL,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timeButtonText: {
+  displayTime: {
+    fontSize: tokens.FONT_SIZES.DISPLAY,
+    fontFamily: tokens.TYPOGRAPHY.display,
     color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.HERO,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-    letterSpacing: -2,
+    textAlign: 'center',
+    letterSpacing: -1.2,
   },
-  timeSubtext: {
+  tapToChange: {
+    marginTop: tokens.SPACING.SM,
+    fontSize: tokens.FONT_SIZES.XS,
+    color: tokens.COLORS.TEXT_DIM,
+    textAlign: 'center',
+    fontFamily: tokens.TYPOGRAPHY.body,
+  },
+  sectionContainer: {
+    marginTop: tokens.SPACING.XL,
+    gap: tokens.SPACING.MD,
+  },
+  sectionLabel: {
+    fontSize: tokens.FONT_SIZES.XS,
+    letterSpacing: 4,
     color: tokens.COLORS.TEXT_SECONDARY,
-    fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.BODY,
+    textTransform: 'uppercase',
+    fontFamily: tokens.TYPOGRAPHY.medium,
   },
-  pillsRow: {
+  wakeWindowRow: {
     flexDirection: 'row',
-    gap: tokens.SPACING.SM,
+    gap: tokens.SPACING.MD,
+    marginTop: tokens.SPACING.MD,
   },
-  pill: {
+  wakePill: {
+    paddingHorizontal: tokens.SPACING.LG,
     paddingVertical: tokens.SPACING.SM,
-    paddingHorizontal: tokens.SPACING.MD,
     borderRadius: tokens.RADIUS.FULL,
     borderWidth: 1,
-    borderColor: tokens.COLORS.BORDER,
-    backgroundColor: tokens.COLORS.SURFACE,
   },
-  pillActive: {
+  wakePillActive: {
     backgroundColor: tokens.COLORS.ACCENT,
     borderColor: tokens.COLORS.ACCENT,
   },
-  pillText: {
+  wakePillInactive: {
+    backgroundColor: tokens.COLORS.SURFACE,
+    borderColor: tokens.COLORS.BORDER,
+  },
+  wakePillText: {
+    fontSize: tokens.FONT_SIZES.SM,
+    fontFamily: tokens.TYPOGRAPHY.medium,
     color: tokens.COLORS.TEXT_SECONDARY,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
   },
-  pillTextActive: {
-    color: tokens.COLORS.WHITE,
+  wakePillTextActive: {
+    color: tokens.COLORS.TEXT_PRIMARY,
   },
-  toggleRow: {
+  enableRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: tokens.SPACING.XL,
   },
-  muted: {
-    color: tokens.COLORS.TEXT_SECONDARY,
-    fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.BODY,
+  enableLabel: {
+    fontSize: tokens.FONT_SIZES.MD,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    color: tokens.COLORS.TEXT_PRIMARY,
+  },
+  togglePill: {
+    width: 40,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
   },
   saveButton: {
+    marginTop: tokens.SPACING.XL,
     width: '100%',
     backgroundColor: tokens.COLORS.ACCENT,
-    borderRadius: tokens.RADIUS.FULL,
-    paddingVertical: tokens.SPACING.MD,
+    borderRadius: tokens.RADIUS.XL,
+    padding: tokens.SPACING.LG,
     alignItems: 'center',
   },
   saveButtonText: {
-    color: tokens.COLORS.WHITE,
-    fontSize: tokens.FONT_SIZES.MD,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-  },
-  confirmationText: {
-    color: tokens.COLORS.SUCCESS,
-    fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
+    fontSize: tokens.FONT_SIZES.LG,
+    fontFamily: tokens.TYPOGRAPHY.display,
+    color: tokens.COLORS.TEXT_PRIMARY,
     textAlign: 'center',
   },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
+  overlayContainer: {
+    flex: 1,
     backgroundColor: tokens.COLORS.BACKGROUND,
-    alignItems: 'center',
     justifyContent: 'center',
-    padding: tokens.SPACING.LG,
-  },
-  overlayCard: {
-    width: '100%',
     alignItems: 'center',
-    gap: tokens.SPACING.SM,
+    padding: tokens.SPACING.XL,
   },
   overlayTime: {
+    fontSize: tokens.FONT_SIZES.DISPLAY,
+    fontFamily: tokens.TYPOGRAPHY.display,
     color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.HERO,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-    letterSpacing: -2,
+    letterSpacing: -1.2,
   },
-  overlayTitle: {
-    color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.LG,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-  },
-  overlayText: {
+  overlaySubtitle: {
+    marginTop: tokens.SPACING.MD,
+    fontSize: tokens.FONT_SIZES.XL,
+    fontFamily: tokens.TYPOGRAPHY.medium,
     color: tokens.COLORS.TEXT_SECONDARY,
-    fontFamily: tokens.TYPOGRAPHY.BODY,
   },
-  overlayActions: {
+  overlayButtons: {
+    marginTop: tokens.SPACING.XXL,
     flexDirection: 'row',
-    gap: tokens.SPACING.SM,
-    marginTop: tokens.SPACING.LG,
+    gap: tokens.SPACING.MD,
     width: '100%',
   },
-  overlayButton: {
+  snoozeButton: {
     flex: 1,
-    paddingVertical: tokens.SPACING.MD,
-    borderRadius: tokens.RADIUS.FULL,
-    alignItems: 'center',
-  },
-  outlinedButton: {
     borderWidth: 1,
     borderColor: tokens.COLORS.BORDER,
-    backgroundColor: 'transparent',
+    borderRadius: tokens.RADIUS.XL,
+    padding: tokens.SPACING.LG,
+    alignItems: 'center',
+  },
+  snoozeButtonText: {
+    fontSize: tokens.FONT_SIZES.MD,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    color: tokens.COLORS.TEXT_PRIMARY,
   },
   dismissButton: {
+    flex: 1,
     backgroundColor: tokens.COLORS.ACCENT,
+    borderRadius: tokens.RADIUS.XL,
+    padding: tokens.SPACING.LG,
+    alignItems: 'center',
   },
-  overlayButtonText: {
-    color: tokens.COLORS.WHITE,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-  },
-  outlinedButtonText: {
+  dismissButtonText: {
+    fontSize: tokens.FONT_SIZES.MD,
+    fontFamily: tokens.TYPOGRAPHY.medium,
     color: tokens.COLORS.TEXT_PRIMARY,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
   },
 });
