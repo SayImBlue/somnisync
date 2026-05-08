@@ -12,8 +12,8 @@ export default function ConnectionIndicator() {
     if (connectionState === 'scanning') {
       const animation = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulse, { toValue: 0.65, duration: 700, useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 0.4, duration: 750, useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1, duration: 750, useNativeDriver: true }),
         ])
       );
 
@@ -31,30 +31,30 @@ export default function ConnectionIndicator() {
       case 'connected':
         return {
           label: 'Connected',
-          container: styles.connected,
-          text: styles.connectedText,
-          border: styles.connectedBorder,
+          backgroundColor: tokens.COLORS.ACCENT_DIM,
+          borderColor: tokens.COLORS.ACCENT,
+          textColor: tokens.COLORS.ACCENT,
         };
       case 'scanning':
         return {
           label: 'Scanning',
-          container: styles.scanning,
-          text: styles.scanningText,
-          border: styles.scanningBorder,
+          backgroundColor: 'transparent',
+          borderColor: tokens.COLORS.BORDER_BRIGHT,
+          textColor: tokens.COLORS.TEXT_SECONDARY,
         };
       case 'reconnecting':
         return {
           label: 'Reconnecting',
-          container: styles.reconnecting,
-          text: styles.reconnectingText,
-          border: styles.reconnectingBorder,
+          backgroundColor: 'rgba(232,168,56,0.1)',
+          borderColor: tokens.COLORS.WARNING,
+          textColor: tokens.COLORS.WARNING,
         };
       default:
         return {
-          label: 'Disconnected',
-          container: styles.disconnected,
-          text: styles.disconnectedText,
-          border: styles.disconnectedBorder,
+          label: 'Offline',
+          backgroundColor: 'transparent',
+          borderColor: tokens.COLORS.DANGER,
+          textColor: tokens.COLORS.DANGER,
         };
     }
   }, [connectionState]);
@@ -62,67 +62,34 @@ export default function ConnectionIndicator() {
   const animatedStyle = connectionState === 'scanning' ? { opacity: pulse } : null;
 
   return (
-    <Animated.View style={[styles.pill, config.container, config.border, animatedStyle]}>
-      <Text style={[styles.label, config.text]}>{config.label}</Text>
+    <Animated.View
+      style={[
+        styles.pill,
+        {
+          backgroundColor: config.backgroundColor,
+          borderColor: config.borderColor,
+        },
+        animatedStyle,
+      ]}
+    >
+      <Text style={[styles.label, { color: config.textColor }]}>{config.label}</Text>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   pill: {
-    minWidth: 92,
-    paddingHorizontal: tokens.SPACING.MD,
-    paddingVertical: tokens.SPACING.XS,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: tokens.RADIUS.FULL,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
   },
   label: {
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
+    fontFamily: tokens.TYPOGRAPHY.medium,
     fontSize: tokens.FONT_SIZES.XS,
-    letterSpacing: 0.8,
+    letterSpacing: 1,
     textTransform: 'uppercase',
-  },
-  connected: {
-    backgroundColor: tokens.COLORS.ACCENT,
-    shadowColor: tokens.COLORS.ACCENT,
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 3,
-  },
-  connectedBorder: {
-    borderColor: tokens.COLORS.ACCENT,
-  },
-  connectedText: {
-    color: tokens.COLORS.WHITE,
-  },
-  scanning: {
-    backgroundColor: tokens.COLORS.SURFACE_ELEVATED,
-  },
-  scanningBorder: {
-    borderColor: tokens.COLORS.BORDER,
-  },
-  scanningText: {
-    color: tokens.COLORS.TEXT_SECONDARY,
-  },
-  reconnecting: {
-    backgroundColor: 'rgba(255,179,71,0.12)',
-  },
-  reconnectingBorder: {
-    borderColor: tokens.COLORS.WARNING,
-  },
-  reconnectingText: {
-    color: tokens.COLORS.WARNING,
-  },
-  disconnected: {
-    backgroundColor: 'transparent',
-  },
-  disconnectedBorder: {
-    borderColor: tokens.COLORS.DANGER,
-  },
-  disconnectedText: {
-    color: tokens.COLORS.DANGER,
   },
 });
