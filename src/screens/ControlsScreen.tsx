@@ -1,178 +1,168 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Switch } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, ScrollView } from 'react-native';
 import Slider from '@react-native-community/slider';
 
-import Card from '@/components/shared/Card';
 import tokens from '@/components/tokens';
-import SensorTile from '@/components/shared/SensorTile';
 import useBleStore from '@/stores/bleStore';
-import { useSensorData, useBleConnection } from '@/hooks';
-
-const toSliderNumber = (value: number | readonly number[]): number => {
-  if (typeof value === 'number') {
-    return value;
-  }
-  return value.length > 0 ? value[0] ?? 0 : 0;
-};
+import { useBleConnection } from '@/hooks';
 
 export function ControlsScreen() {
   const ble = useBleConnection();
-  const sensor = useSensorData();
   const writeLightControl = useBleStore((state) => state.writeLightControl);
   const writeTempSetpoint = useBleStore((state) => state.writeTempSetpoint);
 
-  const [light, setLight] = useState(50);
-  const [temp, setTemp] = useState(22);
+  const [light, setLight] = useState(72);
+  const [temp, setTemp] = useState(21.5);
   const [manualOverride, setManualOverride] = useState(false);
 
-  const disabled = ble.connectionState !== 'connected';
-  const lightDisplay = useMemo(() => `${Math.round(light)}%`, [light]);
-  const tempDisplay = useMemo(() => `${temp.toFixed(1)}°C`, [temp]);
+  const togglePosition = useRef(new Animated.Value(manualOverride ? 1 : 0)).current;
+
+  const connected = ble.connectionState === 'connected';
+  const disabled = !connected;
+  const lightDisplay = `${Math.round(light)}%`;
+  const tempDisplay = `${temp.toFixed(1)}°C`;
+
+  const handleToggleOverride = () => {
+    const newValue = !manualOverride;
+    setManualOverride(newValue);
+    
+    Animated.timing(togglePosition, {
+      toValue: newValue ? 1 : 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const toggleTranslate = togglePosition.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 18],
+  });
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.container}>
+      {/* Header */}
       <Text style={styles.title}>Controls</Text>
 
-      {disabled ? (
-        <Card style={styles.bannerCard}>
-          <Text style={styles.bannerTitle}>Device disconnected</Text>
-          <Text style={styles.bannerText}>Reconnect to adjust lighting and temperature.</Text>
-        </Card>
-      ) : null}
-
-      <Card style={[styles.sectionCard, disabled && styles.disabledGroup]}>
-        <Text style={styles.sectionLabel}>Lighting</Text>
-        <View style={styles.valueRow}>
-          <Text style={styles.value}>{lightDisplay}</Text>
-          <Text style={styles.unit}>Brightness</Text>
+      {/* Disconnected Banner */}
+      {disabled && (
+        <View style={styles.disconnectedBanner}>
+          <Text style={styles.disconnectedText}>Connect a device to enable controls</Text>
         </View>
-        <SensorTile label="Current ambient" value={sensor?.luminosity ?? '--'} unit="lux" iconName="lightbulb" timestamp={sensor?.timestamp} />
-        <View style={styles.sliderBlock}>
-          <Slider
-            style={styles.slider}
-            value={light}
-            onValueChange={(v: number) => setLight(v)}
-            onSlidingComplete={(v: number) => {
-              const next = toSliderNumber(v);
-              void writeLightControl(next);
-            }}
-            minimumValue={0}
-            maximumValue={100}
-            disabled={disabled || manualOverride}
-            minimumTrackTintColor={tokens.COLORS.ACCENT}
-            maximumTrackTintColor={tokens.COLORS.BORDER}
-            thumbTintColor={tokens.COLORS.ACCENT}
-          />
-        </View>
-      </Card>
+      )}
 
+      {/* Lighting Section */}
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionLabel}>LIGHTING</Text>
+        <Text style={[styles.valueDisplay, disabled && styles.dimText]}>{disabled ? '--' : lightDisplay}</Text>
+        <Slider
+          style={styles.slider}
+          value={light}
+          onValueChange={setLight}
+          onSlidingComplete={(v) => { void writeLightControl(Math.round(v)); }}
+          minimumValue={0}
+          maximumValue={100}
+          step={1}
+          disabled={disabled}
+          minimumTrackTintColor={tokens.COLORS.ACCENT}
+          maximumTrackTintColor={tokens.COLORS.BORDER}
+          thumbTintColor={tokens.COLORS.ACCENT}
+        />
+      </View>
+
+      {/* Divider */}
       <View style={styles.divider} />
 
-      <Card style={[styles.sectionCard, disabled && styles.disabledGroup]}>
-        <Text style={styles.sectionLabel}>Temperature</Text>
-        <View style={styles.valueRow}>
-          <Text style={styles.value}>{tempDisplay}</Text>
-          <Text style={styles.unit}>Target</Text>
-        </View>
-        <SensorTile label="Current ambient" value={sensor?.temperature ?? '--'} unit="°C" iconName="thermometer" timestamp={sensor?.timestamp} />
-        <View style={styles.sliderBlock}>
-          <Slider
-            style={styles.slider}
-            value={temp}
-            onValueChange={(v: number) => setTemp(v)}
-            onSlidingComplete={(v: number) => {
-              const next = toSliderNumber(v);
-              void writeTempSetpoint(next);
-            }}
-            minimumValue={16}
-            maximumValue={28}
-            disabled={disabled || manualOverride}
-            minimumTrackTintColor={tokens.COLORS.ACCENT}
-            maximumTrackTintColor={tokens.COLORS.BORDER}
-            thumbTintColor={tokens.COLORS.ACCENT}
-          />
-        </View>
-      </Card>
-
-      <View style={styles.manualRow}>
-        <View>
-          <Text style={styles.manualLabel}>Manual Override</Text>
-          <Text style={styles.manualSubtext}>{manualOverride ? 'Active' : 'Disabled'}</Text>
-        </View>
-        <View style={styles.toggleWrap}>
-          {manualOverride ? <View style={styles.activeBadge}><Text style={styles.activeBadgeText}>Active</Text></View> : null}
-          <Switch
-            value={manualOverride}
-            onValueChange={setManualOverride}
-            trackColor={{ false: tokens.COLORS.BORDER, true: tokens.COLORS.ACCENT }}
-            thumbColor={tokens.COLORS.TEXT_PRIMARY}
-          />
-        </View>
+      {/* Temperature Section */}
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionLabel}>TEMPERATURE</Text>
+        <Text style={[styles.valueDisplay, disabled && styles.dimText]}>{disabled ? '--' : tempDisplay}</Text>
+        <Slider
+          style={styles.slider}
+          value={temp}
+          onValueChange={setTemp}
+          onSlidingComplete={(v) => { void writeTempSetpoint(v); }}
+          minimumValue={16}
+          maximumValue={28}
+          step={0.5}
+          disabled={disabled}
+          minimumTrackTintColor={tokens.COLORS.ACCENT}
+          maximumTrackTintColor={tokens.COLORS.BORDER}
+          thumbTintColor={tokens.COLORS.ACCENT}
+        />
       </View>
-    </View>
+
+      {/* Manual Override Row */}
+      <View style={styles.overrideRow}>
+        <View>
+          <Text style={styles.overrideLabel}>Manual Override</Text>
+          <Text style={styles.overrideSubtext}>Disable automatic control</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.togglePill, { backgroundColor: manualOverride ? tokens.COLORS.ACCENT : tokens.COLORS.BORDER }]}
+          onPress={handleToggleOverride}
+        >
+          <Animated.View
+            style={[
+              styles.toggleCircle,
+              {
+                transform: [{ translateX: toggleTranslate }],
+                backgroundColor: manualOverride ? tokens.COLORS.WHITE : tokens.COLORS.TEXT_DIM,
+              },
+            ]}
+          />
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scrollContainer: {
     flex: 1,
     backgroundColor: tokens.COLORS.BACKGROUND,
-    padding: tokens.SPACING.LG,
-    gap: tokens.SPACING.LG,
+  },
+  container: {
+    padding: tokens.SPACING.XL,
+    gap: tokens.SPACING.XL,
   },
   title: {
+    fontSize: tokens.FONT_SIZES.XXL,
+    fontFamily: tokens.TYPOGRAPHY.display,
     color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.XL,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
-  bannerCard: {
-    borderColor: tokens.COLORS.WARNING,
-    backgroundColor: 'rgba(255,179,71,0.08)',
+  disconnectedBanner: {
+    borderLeftWidth: 3,
+    borderLeftColor: tokens.COLORS.WARNING,
+    backgroundColor: tokens.COLORS.SURFACE,
+    padding: tokens.SPACING.MD,
+    borderRadius: tokens.RADIUS.SM,
+    marginTop: tokens.SPACING.LG,
   },
-  bannerTitle: {
-    color: tokens.COLORS.WARNING,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
+  disconnectedText: {
     fontSize: tokens.FONT_SIZES.SM,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    color: tokens.COLORS.WARNING,
+    fontFamily: tokens.TYPOGRAPHY.body,
   },
-  bannerText: {
-    marginTop: tokens.SPACING.XS,
-    color: tokens.COLORS.TEXT_SECONDARY,
-    fontFamily: tokens.TYPOGRAPHY.BODY,
-  },
-  sectionCard: {
+  sectionContainer: {
+    marginTop: tokens.SPACING.XL,
     gap: tokens.SPACING.MD,
   },
-  disabledGroup: {
-    opacity: 0.3,
-  },
   sectionLabel: {
-    color: tokens.COLORS.TEXT_SECONDARY,
     fontSize: tokens.FONT_SIZES.XS,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-  valueRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: tokens.SPACING.SM,
-  },
-  value: {
-    color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.DISPLAY,
-    fontFamily: tokens.TYPOGRAPHY.DISPLAY,
-    letterSpacing: -1.2,
-  },
-  unit: {
+    letterSpacing: 4,
     color: tokens.COLORS.TEXT_SECONDARY,
-    fontSize: tokens.FONT_SIZES.SM,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
+    textTransform: 'uppercase',
+    fontFamily: tokens.TYPOGRAPHY.medium,
   },
-  sliderBlock: {
-    marginTop: tokens.SPACING.XS,
+  valueDisplay: {
+    fontSize: tokens.FONT_SIZES.XXXL,
+    fontFamily: tokens.TYPOGRAPHY.display,
+    color: tokens.COLORS.TEXT_PRIMARY,
+    letterSpacing: -1,
+  },
+  dimText: {
+    color: tokens.COLORS.TEXT_DIM,
   },
   slider: {
     width: '100%',
@@ -181,41 +171,35 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: tokens.COLORS.BORDER,
+    marginVertical: tokens.SPACING.XL,
   },
-  manualRow: {
+  overrideRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: tokens.SPACING.SM,
-  },
-  manualLabel: {
-    color: tokens.COLORS.TEXT_PRIMARY,
-    fontSize: tokens.FONT_SIZES.MD,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
-  },
-  manualSubtext: {
-    marginTop: 2,
-    color: tokens.COLORS.TEXT_SECONDARY,
-    fontSize: tokens.FONT_SIZES.XS,
-    fontFamily: tokens.TYPOGRAPHY.BODY,
-  },
-  toggleWrap: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: tokens.SPACING.SM,
+    marginTop: tokens.SPACING.XL,
   },
-  activeBadge: {
-    backgroundColor: tokens.COLORS.ACCENT,
-    paddingHorizontal: tokens.SPACING.SM,
-    paddingVertical: 4,
-    borderRadius: tokens.RADIUS.FULL,
+  overrideLabel: {
+    fontSize: tokens.FONT_SIZES.MD,
+    fontFamily: tokens.TYPOGRAPHY.medium,
+    color: tokens.COLORS.TEXT_PRIMARY,
   },
-  activeBadgeText: {
-    color: tokens.COLORS.WHITE,
-    fontSize: tokens.FONT_SIZES.XS,
-    fontFamily: tokens.TYPOGRAPHY.MEDIUM,
+  overrideSubtext: {
+    fontSize: tokens.FONT_SIZES.SM,
+    color: tokens.COLORS.TEXT_SECONDARY,
+    fontFamily: tokens.TYPOGRAPHY.body,
+    marginTop: tokens.SPACING.XS,
   },
-  sliderRow: {},
-  overrideRow: {},
-  overrideLabel: {},
+  togglePill: {
+    width: 40,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  toggleCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+  },
 });
