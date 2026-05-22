@@ -77,6 +77,6 @@ const styles = StyleSheet.create({
   text: {
     marginTop: tokens.SPACING.SM,
     color: tokens.COLORS.TEXT_SECONDARY,
-    fontFamily: tokens.TYPOGRAPHY.BODY,
+    fontFamily: tokens.TYPOGRAPHY.body,
   },
 });

@@ -1,20 +1,17 @@
 import { audioProcessor } from '../audioProcessor';
 
-jest.mock('expo-av', () => {
-  const RecordingMock = class {
+jest.mock('expo-audio', () => {
+  class AudioRecorderMock {
     async prepareToRecordAsync() {}
-    async startAsync() {}
-    async stopAndUnloadAsync() {}
-    async getStatusAsync() { return {}; }
-  };
+    record() {}
+    async stop() {}
+  }
 
   return {
-    Audio: {
-      requestPermissionsAsync: async () => ({ granted: true }),
-      setAudioModeAsync: async () => {},
-      Recording: RecordingMock,
-      RecordingOptionsPresets: { HIGH_QUALITY: {} },
-    },
+    AudioRecorder: AudioRecorderMock,
+    RecordingPresets: { HIGH_QUALITY: {} },
+    requestRecordingPermissionsAsync: async () => ({ granted: true }),
+    setAudioModeAsync: async () => {},
   };
 });
 

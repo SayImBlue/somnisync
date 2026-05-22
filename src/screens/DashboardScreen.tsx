@@ -122,7 +122,10 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.COLORS.BACKGROUND,
   },
   container: {
+    flexGrow: 1,
+    justifyContent: 'center',
     padding: tokens.SPACING.XL,
+    paddingVertical: tokens.SPACING.XL,
     gap: tokens.SPACING.XL,
   },
   headerRow: {
@@ -140,7 +143,6 @@ const styles = StyleSheet.create({
   heroCard: {
     alignItems: 'center',
     paddingVertical: tokens.SPACING.XL,
-    marginTop: tokens.SPACING.XL,
   },
   liveTime: {
     fontSize: tokens.FONT_SIZES.DISPLAY,
@@ -182,7 +184,6 @@ const styles = StyleSheet.create({
   sensorRow: {
     flexDirection: 'row',
     gap: tokens.SPACING.MD,
-    marginTop: tokens.SPACING.XL,
   },
   signalLostBanner: {
     borderLeftWidth: 3,
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
     fontFamily: tokens.TYPOGRAPHY.body,
   },
   alarmSection: {
-    marginTop: tokens.SPACING.XL,
+    marginTop: tokens.SPACING.SM,
   },
   alarmLabel: {
     fontSize: tokens.FONT_SIZES.XS,
@@ -222,7 +223,7 @@ const styles = StyleSheet.create({
     borderRadius: tokens.RADIUS.XL,
     padding: tokens.SPACING.LG,
     alignItems: 'center',
-    marginTop: tokens.SPACING.XL,
+    marginTop: tokens.SPACING.SM,
   },
   connectButtonText: {
     fontSize: tokens.FONT_SIZES.LG,

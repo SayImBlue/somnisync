@@ -28,6 +28,7 @@ export interface AlarmStore {
 	lastSnoozeAt: number | null; // Debounce rapid snooze taps
 	snoozeDurationMinutes: number; // How long the current snooze lasts
 	setConfig: (config: AlarmConfig) => void;
+	setAlarm: (config: AlarmConfig) => void;
 	armAlarm: () => void;
 	disarmAlarm: () => void;
 	evaluateAlarm: (currentPhase: SleepPhase, now?: number) => boolean;
@@ -142,6 +143,10 @@ const useAlarmStore = create<AlarmStore>((set, get) => ({
 		} else {
 			void backgroundTasks.cancelScheduledAlarmNotification();
 		}
+	},
+
+	setAlarm: (config) => {
+		get().setConfig(config);
 	},
 
 	/** Arm the alarm engine so the current config can trigger inside the wake window. */

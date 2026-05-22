@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2019",
-    "module": "es2015",
+    "module": "esnext",
     "lib": [
       "ES2019",
       "DOM"
