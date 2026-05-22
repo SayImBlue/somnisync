@@ -1,4 +1,4 @@
-import { Audio } from 'expo-av';
+import { AudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 
 import type { SleepPhase } from '../../types';
 import useSleepStore from '@/stores/sleepStore';
@@ -115,7 +115,7 @@ const rms = (samples: Float32Array): number => {
 };
 
 export class AudioProcessorService {
-	private recording: any | null = null;
+	private recording: AudioRecorder | null = null;
 
 	// Warmup discard timestamp to ignore first frames after resume
 	private resumeWarmupUntil: number | null = null;
@@ -128,16 +128,14 @@ export class AudioProcessorService {
 
 	/** Request microphone permission and configure the audio mode for recording. */
 	public async initializeMicrophone(): Promise<boolean> {
-		const permission = await Audio.requestPermissionsAsync();
+		const permission = await requestRecordingPermissionsAsync();
 		if (!permission.granted) {
 			return false;
 		}
 
-		await Audio.setAudioModeAsync({
-			allowsRecordingIOS: true,
-			playsInSilentModeIOS: true,
-			shouldDuckAndroid: true,
-			playThroughEarpieceAndroid: false,
+		await setAudioModeAsync({
+			allowsRecording: true,
+			playsInSilentMode: true,
 		});
 
 		return true;
@@ -150,9 +148,9 @@ export class AudioProcessorService {
 			throw new Error('Microphone permission was not granted.');
 		}
 
-		const recording = new Audio.Recording();
-		await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-		await recording.startAsync();
+		const recording = new AudioRecorder(RecordingPresets.HIGH_QUALITY);
+		await recording.prepareToRecordAsync();
+		recording.record();
 		this.recording = recording;
 
 		// Discard first 10s of audio on resume
@@ -167,7 +165,7 @@ export class AudioProcessorService {
 
 		const recording = this.recording;
 		this.recording = null;
-		await recording.stopAndUnloadAsync();
+		await recording.stop();
 
 		this.resumeWarmupUntil = null;
 		this.recentFrequencies = [];

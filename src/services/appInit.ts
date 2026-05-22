@@ -1,8 +1,7 @@
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, type NativeEventSubscription } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { CONFIG } from '@/config';
-import { createBleManager } from '@/services/ble';
 import useBleStore from '@/stores/bleStore';
 import useAlarmStore from '@/stores/alarmStore';
 import useSleepStore from '@/stores/sleepStore';
@@ -13,7 +12,7 @@ import backgroundTasks from '@/services/background/backgroundTasks';
 const ALARM_CONFIG_KEY = 'somnisync:alarm-config';
 const LAST_DEVICE_ID_KEY = 'lastDeviceId';
 
-let appStateListener: ((state: AppStateStatus) => void) | null = null;
+let appStateSubscription: NativeEventSubscription | null = null;
 let notificationResponseSubscriber: { remove: () => void } | null = null;
 
 /** Save transient state when app goes to background or is killed. */
@@ -153,9 +152,8 @@ export const initApp = async (): Promise<void> => {
   }
 
   // Register AppState listener
-  if (!appStateListener) {
-    appStateListener = handleAppStateChange;
-    AppState.addEventListener('change', appStateListener as any);
+  if (!appStateSubscription) {
+    appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
   }
 
   // Request notification permissions here (background task will handle channels)
@@ -200,9 +198,9 @@ export const initApp = async (): Promise<void> => {
 
 /** Cleanup listeners when app is shutting down (useful for tests). */
 export const teardownApp = async (): Promise<void> => {
-  if (appStateListener) {
-    AppState.removeEventListener('change', appStateListener as any);
-    appStateListener = null;
+  if (appStateSubscription) {
+    appStateSubscription.remove();
+    appStateSubscription = null;
   }
   if (notificationResponseSubscriber) {
     try {

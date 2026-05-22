@@ -1,5 +1,8 @@
 {
   "android": {
     "package": "com.anonymous.somnisync"
-  }
+  },
+  "plugins": [
+    "expo-router"
+  ]
 }
